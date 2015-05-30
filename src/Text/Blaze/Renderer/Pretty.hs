@@ -13,25 +13,30 @@ import Text.Blaze.Renderer.String (fromChoiceString)
 renderString :: Markup  -- ^ Markup to render
              -> String  -- ^ String to append
              -> String  -- ^ Resulting String
-renderString = go 0 id
+renderString = go 0 Nothing
   where
-    go :: Int -> (String -> String) -> MarkupM b -> String -> String
+    go :: Int -> Maybe (String -> String) -> MarkupM b -> String -> String
     go i attrs (Parent _ open close content) =
-        ind i . getString open . attrs . (">\n" ++) . go (inc i) id content
+        ind i . getString open . (maybe id id attrs) . (">\n" ++) . go (inc i) Nothing content
               . ind i . getString close .  ('\n' :)
     go i attrs (CustomParent tag content) =
-        ind i . ('<' :) . fromChoiceString tag . attrs . (">\n" ++) .
-        go (inc i) id content . ind i . ("</" ++) . fromChoiceString tag .
+        ind i . ('<' :) . fromChoiceString tag . (maybe id id attrs) . (">\n" ++) .
+        go (inc i) Nothing content . ind i . ("</" ++) . fromChoiceString tag .
         (">\n" ++)
     go i attrs (Leaf _ begin end) =
-        ind i . getString begin . attrs . getString end . ('\n' :)
+        ind i . getString begin . (maybe id id attrs) . getString end . ('\n' :)
     go i attrs (CustomLeaf tag close) =
-        ind i . ('<' :) . fromChoiceString tag . attrs .
+        ind i . ('<' :) . fromChoiceString tag . (maybe id id attrs) .
         ((if close then " />\n" else ">\n") ++)
-    go i attrs (AddAttribute _ key value h) = flip (go i) h $
-        getString key . fromChoiceString value . ('"' :) . attrs
-    go i attrs (AddCustomAttribute key value h) = flip (go i) h $
-        (' ' : ) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
+    go i Nothing (AddAttribute _ key value h) = flip (go i) h $
+        Just $ getString key . fromChoiceString value . ('"' :)
+    go i (Just attrs) (AddAttribute _ key value h) = flip (go i) h $
+        Just $ getString key . fromChoiceString value . ('"' :) . attrs
+    go i Nothing (AddCustomAttribute key value h) = flip (go i) h $
+        Just $ (' ' : ) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
+        ('"' :)
+    go i (Just attrs) (AddCustomAttribute key value h) = flip (go i) h $
+        Just $ (' ' : ) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
         ('"' :) .  attrs
     go i _ (Content content) = ind i . fromChoiceString content . ('\n' :)
     go i _ (Comment comment) = ind i .

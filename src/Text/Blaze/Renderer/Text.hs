@@ -81,40 +81,50 @@ renderHtmlBuilder = renderMarkupBuilder
 renderMarkupBuilderWith :: (ByteString -> Text)  -- ^ Decoder for bytestrings
                         -> Markup                -- ^ Markup to render
                         -> Builder               -- ^ Resulting builder
-renderMarkupBuilderWith d = go mempty
+renderMarkupBuilderWith d = go Nothing
   where
-    go :: Builder -> MarkupM b -> Builder
+    go :: Maybe Builder -> MarkupM b -> Builder
     go attrs (Parent _ open close content) =
         B.fromText (getText open)
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` B.singleton '>'
-            `mappend` go mempty content
+            `mappend` go Nothing content
             `mappend` B.fromText (getText close)
     go attrs (CustomParent tag content) =
         B.singleton '<'
             `mappend` fromChoiceString d tag
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` B.singleton '>'
-            `mappend` go mempty content
+            `mappend` go Nothing content
             `mappend` B.fromText "</"
             `mappend` fromChoiceString d tag
             `mappend` B.singleton '>'
     go attrs (Leaf _ begin end) =
         B.fromText (getText begin)
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` B.fromText (getText end)
     go attrs (CustomLeaf tag close) =
         B.singleton '<'
             `mappend` fromChoiceString d tag
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` (if close then B.fromText " />" else B.singleton '>')
-    go attrs (AddAttribute _ key value h) =
-        go (B.fromText (getText key)
+    go Nothing (AddAttribute _ key value h) =
+        go (Just $ B.fromText (getText key)
+            `mappend` fromChoiceString d value
+            `mappend` B.singleton '"') h
+    go (Just attrs) (AddAttribute _ key value h) =
+        go (Just $ B.fromText (getText key)
             `mappend` fromChoiceString d value
             `mappend` B.singleton '"'
             `mappend` attrs) h
-    go attrs (AddCustomAttribute key value h) =
-        go (B.singleton ' '
+    go Nothing (AddCustomAttribute key value h) =
+        go (Just $ B.singleton ' '
+            `mappend` fromChoiceString d key
+            `mappend` B.fromText "=\""
+            `mappend` fromChoiceString d value
+            `mappend` B.singleton '"') h
+    go (Just attrs) (AddCustomAttribute key value h) =
+        go (Just $ B.singleton ' '
             `mappend` fromChoiceString d key
             `mappend` B.fromText "=\""
             `mappend` fromChoiceString d value

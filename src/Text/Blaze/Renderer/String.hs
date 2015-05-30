@@ -59,22 +59,27 @@ fromChoiceString EmptyChoiceString = id
 renderString :: Markup    -- ^ Markup to render
              -> String  -- ^ String to append
              -> String  -- ^ Resulting String
-renderString = go id
+renderString = go Nothing
   where
-    go :: (String -> String) -> MarkupM b -> String -> String
+    go :: Maybe (String -> String) -> MarkupM b -> String -> String
     go attrs (Parent _ open close content) =
-        getString open . attrs . ('>' :) . go id content . getString close
+        getString open . (maybe id id attrs) . ('>' :) . go Nothing content . getString close
     go attrs (CustomParent tag content) =
-        ('<' :) . fromChoiceString tag . attrs . ('>' :) .  go id content .
+        ('<' :) . fromChoiceString tag . (maybe id id attrs) . ('>' :) .  go Nothing content .
         ("</" ++) . fromChoiceString tag . ('>' :)
-    go attrs (Leaf _ begin end) = getString begin . attrs . getString end
+    go attrs (Leaf _ begin end) = getString begin . (maybe id id attrs) . getString end
     go attrs (CustomLeaf tag close) =
-        ('<' :) . fromChoiceString tag . attrs .
+        ('<' :) . fromChoiceString tag . (maybe id id attrs) .
         (if close then (" />" ++) else ('>' :))
-    go attrs (AddAttribute _ key value h) = flip go h $
-        getString key . fromChoiceString value . ('"' :) . attrs
-    go attrs (AddCustomAttribute key value h) = flip go h $
-        (' ' :) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
+    go Nothing (AddAttribute _ key value h) = flip go h $
+        Just $ getString key . fromChoiceString value . ('"' :)
+    go (Just attrs) (AddAttribute _ key value h) = flip go h $
+        Just $ getString key . fromChoiceString value . ('"' :) . attrs
+    go Nothing (AddCustomAttribute key value h) = flip go h $
+        Just $ (' ' :) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
+        ('"' :)
+    go (Just attrs) (AddCustomAttribute key value h) = flip go h $
+        Just $ (' ' :) . fromChoiceString key . ("=\"" ++) . fromChoiceString value .
         ('"' :) .  attrs
     go _ (Content content) = fromChoiceString content
     go _ (Comment comment) =

@@ -49,38 +49,48 @@ renderMarkupBuilder, renderHtmlBuilder :: Markup     -- ^ Markup to render
                   -> Builder  -- ^ Resulting builder
 renderMarkupBuilder = go mempty
   where
-    go :: Builder -> MarkupM b -> Builder
+    go :: Maybe Builder -> MarkupM b -> Builder
     go attrs (Parent _ open close content) =
         B.copyByteString (getUtf8ByteString open)
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` B.fromChar '>'
-            `mappend` go mempty content
+            `mappend` go Nothing content
             `mappend` B.copyByteString (getUtf8ByteString close)
     go attrs (CustomParent tag content) =
         B.fromChar '<'
             `mappend` fromChoiceString tag
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` B.fromChar '>'
-            `mappend` go mempty content
+            `mappend` go Nothing content
             `mappend` B.fromByteString "</"
             `mappend` fromChoiceString tag
             `mappend` B.fromChar '>'
     go attrs (Leaf _ begin end) =
         B.copyByteString (getUtf8ByteString begin)
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` B.copyByteString (getUtf8ByteString end)
     go attrs (CustomLeaf tag close) =
         B.fromChar '<'
             `mappend` fromChoiceString tag
-            `mappend` attrs
+            `mappend` (maybe mempty id attrs)
             `mappend` (if close then B.fromByteString " />" else B.fromChar '>')
-    go attrs (AddAttribute _ key value h) =
-        go (B.copyByteString (getUtf8ByteString key)
+    go Nothing (AddAttribute _ key value h) =
+        go (Just $ B.copyByteString (getUtf8ByteString key)
+            `mappend` fromChoiceString value
+            `mappend` B.fromChar '"') h
+    go (Just attrs) (AddAttribute _ key value h) =
+        go (Just $ B.copyByteString (getUtf8ByteString key)
             `mappend` fromChoiceString value
             `mappend` B.fromChar '"'
             `mappend` attrs) h
-    go attrs (AddCustomAttribute key value h) =
-        go (B.fromChar ' '
+    go Nothing (AddCustomAttribute key value h) =
+        go (Just $ B.fromChar ' '
+            `mappend` fromChoiceString key
+            `mappend` B.fromByteString "=\""
+            `mappend` fromChoiceString value
+            `mappend` B.fromChar '"') h
+    go (Just attrs) (AddCustomAttribute key value h) =
+        go (Just $ B.fromChar ' '
             `mappend` fromChoiceString key
             `mappend` B.fromByteString "=\""
             `mappend` fromChoiceString value
