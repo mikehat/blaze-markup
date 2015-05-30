@@ -62,14 +62,23 @@ renderString :: Markup    -- ^ Markup to render
 renderString = go Nothing
   where
     go :: Maybe (String -> String) -> MarkupM b -> String -> String
-    go attrs (Parent _ open close content) =
-        getString open . (maybe id id attrs) . ('>' :) . go Nothing content . getString close
-    go attrs (CustomParent tag content) =
-        ('<' :) . fromChoiceString tag . (maybe id id attrs) . ('>' :) .  go Nothing content .
+    go Nothing (Parent _ open close content) =
+        getString open . ('>' :) . go Nothing content . getString close
+    go (Just attrs) (Parent _ open close content) =
+        getString open . attrs . ('>' :) . go Nothing content . getString close
+    go Nothing (CustomParent tag content) =
+        ('<' :) . fromChoiceString tag . ('>' :) .  go Nothing content .
         ("</" ++) . fromChoiceString tag . ('>' :)
-    go attrs (Leaf _ begin end) = getString begin . (maybe id id attrs) . getString end
-    go attrs (CustomLeaf tag close) =
-        ('<' :) . fromChoiceString tag . (maybe id id attrs) .
+    go (Just attrs) (CustomParent tag content) =
+        ('<' :) . fromChoiceString tag . attrs . ('>' :) .  go Nothing content .
+        ("</" ++) . fromChoiceString tag . ('>' :)
+    go Nothing (Leaf _ begin end) = getString begin . getString end
+    go (Just attrs) (Leaf _ begin end) = getString begin . attrs . getString end
+    go Nothing (CustomLeaf tag close) =
+        ('<' :) . fromChoiceString tag .
+        (if close then (" />" ++) else ('>' :))
+    go (Just attrs) (CustomLeaf tag close) =
+        ('<' :) . fromChoiceString tag . attrs .
         (if close then (" />" ++) else ('>' :))
     go Nothing (AddAttribute _ key value h) = flip go h $
         Just $ getString key . fromChoiceString value . ('"' :)

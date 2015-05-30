@@ -16,17 +16,29 @@ renderString :: Markup  -- ^ Markup to render
 renderString = go 0 Nothing
   where
     go :: Int -> Maybe (String -> String) -> MarkupM b -> String -> String
-    go i attrs (Parent _ open close content) =
-        ind i . getString open . (maybe id id attrs) . (">\n" ++) . go (inc i) Nothing content
+    go i Nothing (Parent _ open close content) =
+        ind i . getString open . (">\n" ++) . go (inc i) Nothing content
               . ind i . getString close .  ('\n' :)
-    go i attrs (CustomParent tag content) =
-        ind i . ('<' :) . fromChoiceString tag . (maybe id id attrs) . (">\n" ++) .
+    go i (Just attrs) (Parent _ open close content) =
+        ind i . getString open . attrs . (">\n" ++) . go (inc i) Nothing content
+              . ind i . getString close .  ('\n' :)
+    go i Nothing (CustomParent tag content) =
+        ind i . ('<' :) . fromChoiceString tag . (">\n" ++) .
         go (inc i) Nothing content . ind i . ("</" ++) . fromChoiceString tag .
         (">\n" ++)
-    go i attrs (Leaf _ begin end) =
-        ind i . getString begin . (maybe id id attrs) . getString end . ('\n' :)
-    go i attrs (CustomLeaf tag close) =
-        ind i . ('<' :) . fromChoiceString tag . (maybe id id attrs) .
+    go i (Just attrs) (CustomParent tag content) =
+        ind i . ('<' :) . fromChoiceString tag . attrs . (">\n" ++) .
+        go (inc i) Nothing content . ind i . ("</" ++) . fromChoiceString tag .
+        (">\n" ++)
+    go i Nothing (Leaf _ begin end) =
+        ind i . getString begin . getString end . ('\n' :)
+    go i (Just attrs) (Leaf _ begin end) =
+        ind i . getString begin . attrs . getString end . ('\n' :)
+    go i Nothing (CustomLeaf tag close) =
+        ind i . ('<' :) . fromChoiceString tag .
+        ((if close then " />\n" else ">\n") ++)
+    go i (Just attrs) (CustomLeaf tag close) =
+        ind i . ('<' :) . fromChoiceString tag . attrs .
         ((if close then " />\n" else ">\n") ++)
     go i Nothing (AddAttribute _ key value h) = flip (go i) h $
         Just $ getString key . fromChoiceString value . ('"' :)

@@ -84,29 +84,49 @@ renderMarkupBuilderWith :: (ByteString -> Text)  -- ^ Decoder for bytestrings
 renderMarkupBuilderWith d = go Nothing
   where
     go :: Maybe Builder -> MarkupM b -> Builder
-    go attrs (Parent _ open close content) =
+    go Nothing (Parent _ open close content) =
         B.fromText (getText open)
-            `mappend` (maybe mempty id attrs)
             `mappend` B.singleton '>'
             `mappend` go Nothing content
             `mappend` B.fromText (getText close)
-    go attrs (CustomParent tag content) =
+    go (Just attrs) (Parent _ open close content) =
+        B.fromText (getText open)
+            `mappend` attrs
+            `mappend` B.singleton '>'
+            `mappend` go Nothing content
+            `mappend` B.fromText (getText close)
+    go Nothing (CustomParent tag content) =
         B.singleton '<'
             `mappend` fromChoiceString d tag
-            `mappend` (maybe mempty id attrs)
             `mappend` B.singleton '>'
             `mappend` go Nothing content
             `mappend` B.fromText "</"
             `mappend` fromChoiceString d tag
             `mappend` B.singleton '>'
-    go attrs (Leaf _ begin end) =
-        B.fromText (getText begin)
-            `mappend` (maybe mempty id attrs)
-            `mappend` B.fromText (getText end)
-    go attrs (CustomLeaf tag close) =
+    go (Just attrs) (CustomParent tag content) =
         B.singleton '<'
             `mappend` fromChoiceString d tag
-            `mappend` (maybe mempty id attrs)
+            `mappend` attrs
+            `mappend` B.singleton '>'
+            `mappend` go Nothing content
+            `mappend` B.fromText "</"
+            `mappend` fromChoiceString d tag
+            `mappend` B.singleton '>'
+    go Nothing (Leaf _ begin end) =
+        B.fromText (getText begin)
+            `mappend` B.fromText (getText end)
+    go (Just attrs) (Leaf _ begin end) =
+        B.fromText (getText begin)
+            `mappend` attrs
+            `mappend` B.fromText (getText end)
+    go Nothing (CustomLeaf tag close) =
+        B.singleton '<'
+            `mappend` fromChoiceString d tag
+            `mappend` (if close then B.fromText " />" else B.singleton '>')
+    go (Just attrs) (CustomLeaf tag close) =
+        B.singleton '<'
+            `mappend` fromChoiceString d tag
+            `mappend` attrs
             `mappend` (if close then B.fromText " />" else B.singleton '>')
     go Nothing (AddAttribute _ key value h) =
         go (Just $ B.fromText (getText key)
